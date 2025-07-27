@@ -90,13 +90,13 @@
       ],
       "properties": {"Node name for S&R": "FluxLogoTransferNode"},
       "widgets_values": [
-        0.95,
-        true,
-        0.2,
+        1.0,
+        false,
+        0.0,
         0.6,
         "professional",
-        "precise logo application exactly where mask indicates, professional transfer, sharp clean edges, commercial quality",
-        "blurry edges, misaligned logo, poor mask adherence, distorted proportions, low quality artifacts",
+        "direct logo replacement in mask area, logo intacto, no blending, exact placement, sharp edges",
+        "blended logo, mixed colors, distorted logo, soft edges, texture overlay on logo",
         false,
         true
       ],

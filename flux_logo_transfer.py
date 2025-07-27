@@ -397,9 +397,9 @@ class FluxLogoTransferNode:
             return (garment_image, mask, error_report)
     
     def _advanced_blend(self, garment, logo, mask, strength, texture_preservation, fabric_analysis):
-        """Advanced blending algorithm - applies logo exactly where mask indicates"""
+        """Direct logo application - logo appears INTACTO where mask indicates"""
         try:
-            print(f"🎨 Starting manual mask blending - garment: {garment.shape}, logo: {logo.shape}")
+            print(f"🎨 DIRECT LOGO APPLICATION - garment: {garment.shape}, logo: {logo.shape}")
             
             # Convert to numpy for processing
             garment_np = garment.squeeze(0).cpu().numpy()
@@ -419,7 +419,7 @@ class FluxLogoTransferNode:
             print(f"🎭 Mask shape: {mask_np.shape}, range: {mask_np.min():.3f}-{mask_np.max():.3f}")
             print(f"🎭 Mask coverage: {(mask_np > 0.1).sum()} pixels")
             
-            # Resize logo to match garment dimensions first
+            # Resize logo to match garment dimensions
             if garment_np.shape[:2] != logo_np.shape[:2]:
                 logo_resized = cv2.resize(logo_np, (garment_np.shape[1], garment_np.shape[0]), 
                                         interpolation=cv2.INTER_LANCZOS4)
@@ -428,48 +428,62 @@ class FluxLogoTransferNode:
                 logo_resized = logo_np.copy()
                 print("✅ Logo already matches garment size")
             
-            # Ensure mask is 3D for RGB blending
-            if len(mask_np.shape) == 2:
-                mask_3d = np.stack([mask_np] * 3, axis=-1)
+            # Create result starting with original garment
+            result = garment_np.copy()
+            
+            # Apply logo DIRECTAMENTE where mask indicates (no blending)
+            # Mask values > threshold = logo area
+            mask_threshold = 0.1
+            logo_areas = mask_np > mask_threshold
+            
+            print(f"🎯 Logo will be applied to {logo_areas.sum()} pixels")
+            
+            if strength >= 0.95:
+                # DIRECT REPLACEMENT - Logo intacto
+                print("🔥 DIRECT REPLACEMENT MODE - Logo intacto")
+                for c in range(3):  # RGB channels
+                    result[logo_areas, c] = logo_resized[logo_areas, c]
+                print("✅ Logo applied INTACTO (direct replacement)")
+                
             else:
-                mask_3d = mask_np
+                # PARTIAL BLENDING for strength < 0.95
+                print(f"🔥 PARTIAL BLENDING MODE - strength: {strength}")
+                for c in range(3):  # RGB channels
+                    result[logo_areas, c] = (
+                        garment_np[logo_areas, c] * (1 - strength) + 
+                        logo_resized[logo_areas, c] * strength
+                    )
+                print(f"✅ Logo applied with {strength*100:.1f}% strength")
             
-            print(f"🎭 Final mask shape: {mask_3d.shape}")
-            
-            # Apply logo exactly where mask indicates
-            print(f"🧵 Fabric type: {fabric_analysis['fabric_type']}, strength: {strength}")
-            
-            # Create alpha channel from mask
-            alpha = mask_3d * strength
-            
-            if fabric_analysis["fabric_type"] == "textured":
-                # For textured fabrics, blend more naturally with fabric
-                blended = garment_np * (1 - alpha) + (garment_np * 0.3 + logo_resized * 0.7) * alpha
-                print("✅ Applied textured fabric blending (fabric + logo mix)")
-            else:
-                # For smooth fabrics, direct logo application
-                blended = garment_np * (1 - alpha) + logo_resized * alpha
-                print("✅ Applied smooth fabric blending (direct logo)")
-            
-            # Texture preservation - maintain fabric texture in logo area
-            if texture_preservation > 0:
-                # Extract fabric texture and overlay it slightly
-                fabric_texture = garment_np - cv2.GaussianBlur(garment_np, (15, 15), 5)
-                texture_strength = texture_preservation * alpha
-                blended = blended + fabric_texture * texture_strength * 0.3
-                print(f"✅ Applied texture preservation: {texture_preservation}")
+            # Optional: Slight edge softening if texture_preservation > 0
+            if texture_preservation > 0 and strength < 0.95:
+                # Very light gaussian blur only on edges
+                mask_edges = cv2.Canny((mask_np * 255).astype(np.uint8), 50, 150)
+                edge_pixels = mask_edges > 0
+                
+                if edge_pixels.sum() > 0:
+                    # Soften edges slightly
+                    edge_blur = cv2.GaussianBlur(result, (3, 3), 0.5)
+                    blend_factor = texture_preservation * 0.3
+                    
+                    for c in range(3):
+                        result[edge_pixels, c] = (
+                            result[edge_pixels, c] * (1 - blend_factor) + 
+                            edge_blur[edge_pixels, c] * blend_factor
+                        )
+                    print(f"✅ Applied edge softening: {texture_preservation}")
             
             # Ensure valid color range
-            blended = np.clip(blended, 0, 1)
+            result = np.clip(result, 0, 1)
             
             # Convert back to tensor
-            result = torch.from_numpy(blended.astype(np.float32)).unsqueeze(0)
-            print(f"✅ Manual mask blend complete - output shape: {result.shape}")
+            result_tensor = torch.from_numpy(result.astype(np.float32)).unsqueeze(0)
+            print(f"✅ DIRECT logo application complete - output shape: {result_tensor.shape}")
             
-            return result
+            return result_tensor
             
         except Exception as e:
-            print(f"❌ Manual mask blending failed: {e}")
+            print(f"❌ Direct logo application failed: {e}")
             import traceback
             traceback.print_exc()
             return garment
