@@ -180,69 +180,67 @@ class FluxLogoTransferNode:
             return "smooth"    # Polyester, silk, etc.
     
     def generate_auto_mask_sam(self, image_tensor, logo_tensor):
-        """Generate automatic mask using SAM-like approach (simplified)"""
+        """Generate automatic mask for logo placement"""
         try:
-            # Convert images
-            image_np = (image_tensor.squeeze(0).cpu().numpy() * 255).astype(np.uint8)
-            logo_np = (logo_tensor.squeeze(0).cpu().numpy() * 255).astype(np.uint8)
+            print("🎭 Generating auto-mask for logo placement...")
             
-            # Template matching for logo placement
-            gray_image = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
-            gray_logo = cv2.cvtColor(logo_np, cv2.COLOR_RGB2GRAY)
+            # Get image dimensions
+            h, w = image_tensor.shape[1:3]
+            print(f"📐 Image dimensions: {h}x{w}")
             
-            # Multi-scale template matching
-            scales = [0.5, 0.7, 1.0, 1.3, 1.5]
-            best_match = None
-            best_confidence = 0
+            # Create logo-sized mask in strategic position
+            # For polo shirt, place logo on upper left chest area
+            logo_h, logo_w = logo_tensor.shape[1:3]
             
-            for scale in scales:
-                scaled_logo = cv2.resize(gray_logo, None, fx=scale, fy=scale)
-                if scaled_logo.shape[0] > gray_image.shape[0] or scaled_logo.shape[1] > gray_image.shape[1]:
-                    continue
-                    
-                result = cv2.matchTemplate(gray_image, scaled_logo, cv2.TM_CCOEFF_NORMED)
-                _, confidence, _, location = cv2.minMaxLoc(result)
-                
-                if confidence > best_confidence:
-                    best_confidence = confidence
-                    best_match = {
-                        'location': location,
-                        'scale': scale,
-                        'confidence': confidence,
-                        'size': scaled_logo.shape
-                    }
+            # Calculate ideal logo size (10-15% of image width)
+            ideal_size = int(min(w, h) * 0.12)
+            scale_factor = ideal_size / max(logo_w, logo_h)
             
-            # Generate mask
-            if best_match and best_confidence > 0.3:
-                mask = np.zeros(gray_image.shape, dtype=np.uint8)
-                x, y = best_match['location']
-                h, w = best_match['size']
-                
-                # Create smooth circular/rectangular mask
-                center_x, center_y = x + w//2, y + h//2
-                radius = max(w, h) // 2
-                
-                cv2.circle(mask, (center_x, center_y), radius, 255, -1)
-                
-                # Convert to tensor
-                mask_tensor = torch.from_numpy(mask.astype(np.float32) / 255.0).unsqueeze(0)
-                return mask_tensor
-            else:
-                # Fallback: center mask
-                h, w = gray_image.shape
-                mask = np.zeros((h, w), dtype=np.uint8)
-                center_x, center_y = w//2, h//2
-                radius = min(w, h) // 6
-                cv2.circle(mask, (center_x, center_y), radius, 255, -1)
-                mask_tensor = torch.from_numpy(mask.astype(np.float32) / 255.0).unsqueeze(0)
-                return mask_tensor
+            new_logo_w = int(logo_w * scale_factor)
+            new_logo_h = int(logo_h * scale_factor)
+            
+            print(f"🎯 Calculated logo size: {new_logo_h}x{new_logo_w}")
+            
+            # Position for polo shirt chest area (upper right from viewer perspective) 
+            chest_x = int(w * 0.65)  # Right side of chest
+            chest_y = int(h * 0.25)  # Upper chest area
+            
+            # Ensure logo fits within image
+            chest_x = min(chest_x, w - new_logo_w - 10)
+            chest_y = min(chest_y, h - new_logo_h - 10)
+            chest_x = max(chest_x, 10)
+            chest_y = max(chest_y, 10)
+            
+            print(f"📍 Logo position: ({chest_x}, {chest_y})")
+            
+            # Create precise rectangular mask
+            mask = np.zeros((h, w), dtype=np.float32)
+            
+            # Create soft-edge rectangular mask
+            mask_region = mask[chest_y:chest_y+new_logo_h, chest_x:chest_x+new_logo_w]
+            mask_region[:, :] = 1.0
+            
+            # Apply slight gaussian blur for soft edges
+            mask = cv2.GaussianBlur(mask, (5, 5), 1.0)
+            
+            # Convert to tensor
+            mask_tensor = torch.from_numpy(mask).unsqueeze(0)
+            
+            mask_sum = mask_tensor.sum()
+            print(f"✅ Auto-mask generated - sum: {mask_sum:.1f}, max: {mask_tensor.max():.3f}")
+            
+            return mask_tensor
                 
         except Exception as e:
-            print(f"⚠️ Auto-mask generation failed: {e}")
-            # Return center mask as fallback
+            print(f"❌ Auto-mask generation failed: {e}")
+            import traceback
+            traceback.print_exc()
+            
+            # Simple fallback mask
             h, w = image_tensor.shape[1:3]
             mask = torch.zeros((1, h, w))
-            mask[0, h//3:2*h//3, w//3:2*w//3] = 1.0
+            # Small rectangular area in upper right
+            mask[0, h//4:h//2, w//2:3*w//4] = 1.0
             return mask
     
     def optimize_logo_for_fabric(self, logo_tensor, fabric_analysis, semantic_info):
@@ -298,11 +296,13 @@ class FluxLogoTransferNode:
             else:
                 fabric_analysis = {"fabric_type": "smooth", "texture_complexity": 0.5}
             
-            # 3. Auto-mask generation if requested
-            if auto_mask_generate:
+            # 3. Auto-mask generation if requested (only if no mask provided)
+            if auto_mask_generate and mask is None:
                 auto_mask = self.generate_auto_mask_sam(garment_image, logo_image)
                 mask = auto_mask
                 quality_report.append("Auto-mask generated using SAM-like algorithm")
+            elif mask is not None:
+                quality_report.append("Using user-provided mask for precise logo placement")
             
             # 4. Logo optimization
             optimized_logo = self.optimize_logo_for_fabric(logo_image, fabric_analysis, semantic_info)
@@ -397,9 +397,9 @@ class FluxLogoTransferNode:
             return (garment_image, mask, error_report)
     
     def _advanced_blend(self, garment, logo, mask, strength, texture_preservation, fabric_analysis):
-        """Advanced blending algorithm with texture preservation"""
+        """Advanced blending algorithm - applies logo exactly where mask indicates"""
         try:
-            print(f"🎨 Starting advanced blend - garment: {garment.shape}, logo: {logo.shape}")
+            print(f"🎨 Starting manual mask blending - garment: {garment.shape}, logo: {logo.shape}")
             
             # Convert to numpy for processing
             garment_np = garment.squeeze(0).cpu().numpy()
@@ -409,64 +409,67 @@ class FluxLogoTransferNode:
             
             # Handle mask
             if mask is None:
-                print("🎭 No mask provided, generating center mask")
-                h, w = garment_np.shape[:2]
-                mask_np = np.zeros((h, w), dtype=np.float32)
-                # Create circular mask in center
-                center_x, center_y = w // 2, h // 2
-                radius = min(w, h) // 6
-                y, x = np.ogrid[:h, :w]
-                mask_np = ((x - center_x)**2 + (y - center_y)**2) <= radius**2
-                mask_np = mask_np.astype(np.float32)
-            else:
-                mask_np = mask.squeeze(0).cpu().numpy()
-                if len(mask_np.shape) == 3:
-                    mask_np = mask_np[0]  # Take first channel if RGB mask
+                print("❌ No mask provided! Manual mask is required.")
+                return garment
+            
+            mask_np = mask.squeeze(0).cpu().numpy()
+            if len(mask_np.shape) == 3:
+                mask_np = mask_np[0]  # Take first channel if RGB mask
             
             print(f"🎭 Mask shape: {mask_np.shape}, range: {mask_np.min():.3f}-{mask_np.max():.3f}")
+            print(f"🎭 Mask coverage: {(mask_np > 0.1).sum()} pixels")
             
-            # Resize logo to match garment if needed
+            # Resize logo to match garment dimensions first
             if garment_np.shape[:2] != logo_np.shape[:2]:
-                print(f"🔄 Resizing logo from {logo_np.shape[:2]} to {garment_np.shape[:2]}")
-                logo_resized = cv2.resize(logo_np, (garment_np.shape[1], garment_np.shape[0]))
-                logo_np = logo_resized
+                logo_resized = cv2.resize(logo_np, (garment_np.shape[1], garment_np.shape[0]), 
+                                        interpolation=cv2.INTER_LANCZOS4)
+                print(f"🔄 Logo resized to match garment: {logo_resized.shape[:2]}")
+            else:
+                logo_resized = logo_np.copy()
+                print("✅ Logo already matches garment size")
             
             # Ensure mask is 3D for RGB blending
             if len(mask_np.shape) == 2:
-                mask_np = np.stack([mask_np] * 3, axis=-1)
+                mask_3d = np.stack([mask_np] * 3, axis=-1)
+            else:
+                mask_3d = mask_np
             
-            # Advanced blending based on fabric type
+            print(f"🎭 Final mask shape: {mask_3d.shape}")
+            
+            # Apply logo exactly where mask indicates
             print(f"🧵 Fabric type: {fabric_analysis['fabric_type']}, strength: {strength}")
             
-            if fabric_analysis["fabric_type"] == "textured":
-                # Multiplicative blending for textured fabrics
-                alpha = mask_np * strength
-                blended = garment_np * (1 - alpha) + (garment_np * logo_np * alpha)
-                print("✅ Applied textured fabric blending")
-            else:
-                # Standard alpha blending for smooth fabrics
-                alpha = mask_np * strength
-                blended = garment_np * (1 - alpha) + logo_np * alpha
-                print("✅ Applied smooth fabric blending")
+            # Create alpha channel from mask
+            alpha = mask_3d * strength
             
-            # Texture preservation
+            if fabric_analysis["fabric_type"] == "textured":
+                # For textured fabrics, blend more naturally with fabric
+                blended = garment_np * (1 - alpha) + (garment_np * 0.3 + logo_resized * 0.7) * alpha
+                print("✅ Applied textured fabric blending (fabric + logo mix)")
+            else:
+                # For smooth fabrics, direct logo application
+                blended = garment_np * (1 - alpha) + logo_resized * alpha
+                print("✅ Applied smooth fabric blending (direct logo)")
+            
+            # Texture preservation - maintain fabric texture in logo area
             if texture_preservation > 0:
-                preservation_factor = 1 - texture_preservation
-                texture_blend = mask_np * preservation_factor
-                blended = blended * (1 - texture_blend) + garment_np * texture_blend
+                # Extract fabric texture and overlay it slightly
+                fabric_texture = garment_np - cv2.GaussianBlur(garment_np, (15, 15), 5)
+                texture_strength = texture_preservation * alpha
+                blended = blended + fabric_texture * texture_strength * 0.3
                 print(f"✅ Applied texture preservation: {texture_preservation}")
             
             # Ensure valid color range
             blended = np.clip(blended, 0, 1)
             
-            # Convert back to tensor with correct dimensions
+            # Convert back to tensor
             result = torch.from_numpy(blended.astype(np.float32)).unsqueeze(0)
-            print(f"✅ Blend complete - output shape: {result.shape}")
+            print(f"✅ Manual mask blend complete - output shape: {result.shape}")
             
             return result
             
         except Exception as e:
-            print(f"❌ Advanced blending failed: {e}")
+            print(f"❌ Manual mask blending failed: {e}")
             import traceback
             traceback.print_exc()
             return garment
