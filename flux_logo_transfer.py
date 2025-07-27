@@ -397,93 +397,74 @@ class FluxLogoTransferNode:
             return (garment_image, mask, error_report)
     
     def _advanced_blend(self, garment, logo, mask, strength, texture_preservation, fabric_analysis):
-        """Direct logo application - logo appears INTACTO where mask indicates"""
+        """FINAL CORRECT IMPLEMENTATION: Replace mask area with exact logo content"""
         try:
-            print(f"🎨 DIRECT LOGO APPLICATION - garment: {garment.shape}, logo: {logo.shape}")
+            print(f"🎯 FINAL LOGO REPLACEMENT - garment: {garment.shape}, logo: {logo.shape}")
             
-            # Convert to numpy for processing
+            # Convert to numpy
             garment_np = garment.squeeze(0).cpu().numpy()
             logo_np = logo.squeeze(0).cpu().numpy()
             
-            print(f"📐 Numpy shapes - garment: {garment_np.shape}, logo: {logo_np.shape}")
+            print(f"📐 Input shapes - garment: {garment_np.shape}, logo: {logo_np.shape}")
             
             # Handle mask
             if mask is None:
-                print("❌ No mask provided! Manual mask is required.")
+                print("❌ ERROR: No mask provided!")
                 return garment
             
             mask_np = mask.squeeze(0).cpu().numpy()
             if len(mask_np.shape) == 3:
-                mask_np = mask_np[0]  # Take first channel if RGB mask
+                mask_np = mask_np[0]
             
-            print(f"🎭 Mask shape: {mask_np.shape}, range: {mask_np.min():.3f}-{mask_np.max():.3f}")
-            print(f"🎭 Mask coverage: {(mask_np > 0.1).sum()} pixels")
+            print(f"🎭 Mask shape: {mask_np.shape}, active pixels: {(mask_np > 0.5).sum()}")
             
-            # Resize logo to match garment dimensions
+            # Step 1: Start with original garment as base
+            result = garment_np.copy()
+            print("✅ Step 1: Garment copied as base")
+            
+            # Step 2: Resize logo to match garment size
             if garment_np.shape[:2] != logo_np.shape[:2]:
                 logo_resized = cv2.resize(logo_np, (garment_np.shape[1], garment_np.shape[0]), 
                                         interpolation=cv2.INTER_LANCZOS4)
-                print(f"🔄 Logo resized to match garment: {logo_resized.shape[:2]}")
+                print(f"✅ Step 2: Logo resized from {logo_np.shape[:2]} to {logo_resized.shape[:2]}")
             else:
                 logo_resized = logo_np.copy()
-                print("✅ Logo already matches garment size")
+                print("✅ Step 2: Logo size already matches")
             
-            # Create result starting with original garment
-            result = garment_np.copy()
+            # Step 3: Find mask region (white areas = where logo goes)
+            mask_binary = mask_np > 0.5  # Binary mask
+            active_pixels = mask_binary.sum()
             
-            # Apply logo DIRECTAMENTE where mask indicates (no blending)
-            # Mask values > threshold = logo area
-            mask_threshold = 0.1
-            logo_areas = mask_np > mask_threshold
-            
-            print(f"🎯 Logo will be applied to {logo_areas.sum()} pixels")
-            
-            if strength >= 0.95:
-                # DIRECT REPLACEMENT - Logo intacto
-                print("🔥 DIRECT REPLACEMENT MODE - Logo intacto")
-                for c in range(3):  # RGB channels
-                    result[logo_areas, c] = logo_resized[logo_areas, c]
-                print("✅ Logo applied INTACTO (direct replacement)")
+            if active_pixels == 0:
+                print("❌ ERROR: No active mask pixels found!")
+                return garment
                 
-            else:
-                # PARTIAL BLENDING for strength < 0.95
-                print(f"🔥 PARTIAL BLENDING MODE - strength: {strength}")
-                for c in range(3):  # RGB channels
-                    result[logo_areas, c] = (
-                        garment_np[logo_areas, c] * (1 - strength) + 
-                        logo_resized[logo_areas, c] * strength
-                    )
-                print(f"✅ Logo applied with {strength*100:.1f}% strength")
+            print(f"🎯 Step 3: Found {active_pixels} mask pixels where logo will be placed")
             
-            # Optional: Slight edge softening if texture_preservation > 0
-            if texture_preservation > 0 and strength < 0.95:
-                # Very light gaussian blur only on edges
-                mask_edges = cv2.Canny((mask_np * 255).astype(np.uint8), 50, 150)
-                edge_pixels = mask_edges > 0
-                
-                if edge_pixels.sum() > 0:
-                    # Soften edges slightly
-                    edge_blur = cv2.GaussianBlur(result, (3, 3), 0.5)
-                    blend_factor = texture_preservation * 0.3
-                    
-                    for c in range(3):
-                        result[edge_pixels, c] = (
-                            result[edge_pixels, c] * (1 - blend_factor) + 
-                            edge_blur[edge_pixels, c] * blend_factor
-                        )
-                    print(f"✅ Applied edge softening: {texture_preservation}")
+            # Step 4: DIRECT PIXEL REPLACEMENT in mask area
+            print("🔥 Step 4: DIRECT REPLACEMENT - Logo intacto in mask area")
             
-            # Ensure valid color range
-            result = np.clip(result, 0, 1)
+            # Replace pixels in mask area with corresponding pixels from logo
+            result[mask_binary] = logo_resized[mask_binary]
+            
+            print("✅ PIXEL REPLACEMENT COMPLETE!")
+            print(f"📊 Replaced {active_pixels} pixels with logo content")
+            
+            # Step 5: Verify the replacement
+            changed_pixels = np.sum(np.abs(result - garment_np) > 0.01)
+            print(f"🔍 Verification: {changed_pixels} pixels were modified")
             
             # Convert back to tensor
+            result = np.clip(result, 0, 1)
             result_tensor = torch.from_numpy(result.astype(np.float32)).unsqueeze(0)
-            print(f"✅ DIRECT logo application complete - output shape: {result_tensor.shape}")
+            
+            print(f"✅ SUCCESS: Final result shape: {result_tensor.shape}")
+            print("🎉 Logo should now appear EXACTLY in mask area!")
             
             return result_tensor
             
         except Exception as e:
-            print(f"❌ Direct logo application failed: {e}")
+            print(f"❌ CRITICAL ERROR in logo replacement: {e}")
             import traceback
             traceback.print_exc()
             return garment
