@@ -307,10 +307,8 @@ class FluxLogoTransferNode:
             # 4. Logo optimization
             optimized_logo = self.optimize_logo_for_fabric(logo_image, fabric_analysis, semantic_info)
             
-            # 5. Prepare for Flux processing
-            # Convert images to latent space
-            garment_latent = vae.encode(garment_image)
-            logo_latent = vae.encode(optimized_logo)
+            # 5. Prepare for Flux processing - Skip VAE encoding here
+            # We'll handle latent conversion inside the Flux engine if needed
             
             # Create conditioning based on semantic analysis
             if positive_prompt is None:
@@ -327,13 +325,16 @@ class FluxLogoTransferNode:
             negative_cond = clip.encode_from_tokens(clip.tokenize(negative_prompt), return_pooled=True)
             
             # 6. Initialize Flux engine and prepare for inpainting
-            if not self.flux_engine.load_flux_models(flux_model, vae):
-                quality_report.append("⚠️ Flux models not available, using fallback blending")
-                processed_image = self._advanced_blend(
-                    garment_image, optimized_logo, mask, 
-                    blend_strength, texture_preservation, fabric_analysis
-                )
-            else:
+            # Always try advanced blending first for better compatibility
+            print("🔄 Using advanced blending with texture analysis...")
+            processed_image = self._advanced_blend(
+                garment_image, optimized_logo, mask, 
+                blend_strength, texture_preservation, fabric_analysis
+            )
+            quality_report.append("✅ Advanced blending with fabric analysis completed")
+            
+            # Optional Flux enhancement (if models are properly loaded)
+            if self.flux_engine.load_flux_models(flux_model, vae) and COMFY_AVAILABLE:
                 # 6a. Prepare advanced Flux conditioning
                 flux_positive_cond, flux_negative_cond = self.flux_engine.prepare_flux_conditioning(
                     clip, positive_prompt, negative_prompt, semantic_info, fabric_analysis
@@ -348,22 +349,27 @@ class FluxLogoTransferNode:
                 
                 quality_report.append(f"Flux parameters: steps={optimal_steps}, cfg={optimal_cfg:.1f}")
                 
-                # 6d. Convert to latent space for Flux processing
-                garment_latent = vae.encode(garment_image)
-                logo_latent = vae.encode(optimized_logo)
-                
-                # 6e. Flux.1 + FluxFill inpainting
-                result_latent = self.flux_engine.flux_inpaint_logo(
-                    garment_latent, logo_latent, processed_mask,
-                    flux_positive_cond, flux_negative_cond,
-                    steps=optimal_steps, cfg_scale=optimal_cfg,
-                    denoise=blend_strength
-                )
-                
-                # 6f. Decode back to image space
-                processed_image = vae.decode(result_latent)
-                mask = processed_mask
-                quality_report.append("✅ Flux.1 + FluxFill inpainting completed")
+                try:
+                    # 6d. Try Flux enhancement on the blended result
+                    print("🚀 Attempting Flux enhancement...")
+                    
+                    # Use the blended image as base for Flux refinement
+                    flux_enhanced = self.flux_engine.enhance_with_flux(
+                        processed_image, processed_mask,
+                        flux_positive_cond, flux_negative_cond,
+                        vae, steps=optimal_steps, cfg_scale=optimal_cfg
+                    )
+                    
+                    if flux_enhanced is not None:
+                        processed_image = flux_enhanced
+                        mask = processed_mask
+                        quality_report.append("✅ Flux enhancement applied successfully")
+                    else:
+                        quality_report.append("⚠️ Flux enhancement failed, using advanced blend")
+                        
+                except Exception as e:
+                    print(f"⚠️ Flux enhancement error: {e}")
+                    quality_report.append(f"⚠️ Flux enhancement failed: {str(e)}")
             
             # 7. Quality enhancement post-processing
             if quality_enhancement:
@@ -393,37 +399,76 @@ class FluxLogoTransferNode:
     def _advanced_blend(self, garment, logo, mask, strength, texture_preservation, fabric_analysis):
         """Advanced blending algorithm with texture preservation"""
         try:
+            print(f"🎨 Starting advanced blend - garment: {garment.shape}, logo: {logo.shape}")
+            
             # Convert to numpy for processing
             garment_np = garment.squeeze(0).cpu().numpy()
             logo_np = logo.squeeze(0).cpu().numpy()
-            mask_np = mask.squeeze(0).cpu().numpy()
             
-            # Ensure mask is 3D
+            print(f"📐 Numpy shapes - garment: {garment_np.shape}, logo: {logo_np.shape}")
+            
+            # Handle mask
+            if mask is None:
+                print("🎭 No mask provided, generating center mask")
+                h, w = garment_np.shape[:2]
+                mask_np = np.zeros((h, w), dtype=np.float32)
+                # Create circular mask in center
+                center_x, center_y = w // 2, h // 2
+                radius = min(w, h) // 6
+                y, x = np.ogrid[:h, :w]
+                mask_np = ((x - center_x)**2 + (y - center_y)**2) <= radius**2
+                mask_np = mask_np.astype(np.float32)
+            else:
+                mask_np = mask.squeeze(0).cpu().numpy()
+                if len(mask_np.shape) == 3:
+                    mask_np = mask_np[0]  # Take first channel if RGB mask
+            
+            print(f"🎭 Mask shape: {mask_np.shape}, range: {mask_np.min():.3f}-{mask_np.max():.3f}")
+            
+            # Resize logo to match garment if needed
+            if garment_np.shape[:2] != logo_np.shape[:2]:
+                print(f"🔄 Resizing logo from {logo_np.shape[:2]} to {garment_np.shape[:2]}")
+                logo_resized = cv2.resize(logo_np, (garment_np.shape[1], garment_np.shape[0]))
+                logo_np = logo_resized
+            
+            # Ensure mask is 3D for RGB blending
             if len(mask_np.shape) == 2:
                 mask_np = np.stack([mask_np] * 3, axis=-1)
             
             # Advanced blending based on fabric type
+            print(f"🧵 Fabric type: {fabric_analysis['fabric_type']}, strength: {strength}")
+            
             if fabric_analysis["fabric_type"] == "textured":
-                # Use multiplicative blending for textured fabrics
-                blended = garment_np * (1 - mask_np * strength) + \
-                         (garment_np * logo_np * mask_np * strength)
+                # Multiplicative blending for textured fabrics
+                alpha = mask_np * strength
+                blended = garment_np * (1 - alpha) + (garment_np * logo_np * alpha)
+                print("✅ Applied textured fabric blending")
             else:
-                # Use alpha blending for smooth fabrics
-                blended = garment_np * (1 - mask_np * strength) + \
-                         logo_np * mask_np * strength
+                # Standard alpha blending for smooth fabrics
+                alpha = mask_np * strength
+                blended = garment_np * (1 - alpha) + logo_np * alpha
+                print("✅ Applied smooth fabric blending")
             
             # Texture preservation
             if texture_preservation > 0:
-                # Preserve original texture in non-logo areas
-                texture_mask = 1 - mask_np * (1 - texture_preservation)
-                blended = blended * texture_mask + garment_np * (1 - texture_mask)
+                preservation_factor = 1 - texture_preservation
+                texture_blend = mask_np * preservation_factor
+                blended = blended * (1 - texture_blend) + garment_np * texture_blend
+                print(f"✅ Applied texture preservation: {texture_preservation}")
             
-            # Convert back to tensor
-            result = torch.from_numpy(np.clip(blended, 0, 1).astype(np.float32)).unsqueeze(0)
+            # Ensure valid color range
+            blended = np.clip(blended, 0, 1)
+            
+            # Convert back to tensor with correct dimensions
+            result = torch.from_numpy(blended.astype(np.float32)).unsqueeze(0)
+            print(f"✅ Blend complete - output shape: {result.shape}")
+            
             return result
             
         except Exception as e:
-            print(f"⚠️ Advanced blending failed: {e}")
+            print(f"❌ Advanced blending failed: {e}")
+            import traceback
+            traceback.print_exc()
             return garment
     
     def _enhance_quality(self, image, mode):

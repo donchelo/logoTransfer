@@ -36,20 +36,26 @@ python main.py --listen
 - También puedes buscar: **FluxLogoTransferNode**
 - Categoría: FluxLogoTransfer
 
-## 5. Workflow básico
+## 5. Workflows de ejemplo
 
-### Nodos necesarios:
-1. **LoadImage** (x3): Imagen de prenda, logo, y máscara
-2. **CheckpointLoaderSimple**: Cargar modelo Flux.1
-3. **FluxLogoTransferNode**: El nodo principal
-4. **SaveImage**: Guardar resultado
+Tienes 2 workflows listos para usar:
 
-### Conexiones:
+### A) **flux_logo_workflow_clean.json** (Recomendado)
+- **Auto-máscara**: Genera máscara automáticamente 
+- **Simple**: Solo necesitas 2 imágenes (prenda + logo)
+- **Rápido**: Ideal para pruebas iniciales
+
+### B) **flux_logo_workflow_with_mask.json** (Avanzado)  
+- **Máscara manual**: Puedes proporcionar tu propia máscara
+- **Control total**: Mayor precisión en la colocación
+- **Análisis completo**: Muestra máscara usada y reporte detallado
+
+### Cargar workflow:
 ```
-LoadImage (prenda) → garment_image
-LoadImage (logo) → logo_image  
-LoadImage (máscara) → mask
-CheckpointLoader → flux_model, vae, clip
+1. Arrastra el archivo .json a ComfyUI
+2. O usa "Load" en la interfaz
+3. Conecta tus imágenes
+4. ¡Ejecuta!
 ```
 
 ## 6. Parámetros recomendados

@@ -1,6 +1,6 @@
 {
-  "last_node_id": 8,
-  "last_link_id": 9,
+  "last_node_id": 9,
+  "last_link_id": 11,
   "nodes": [
     {
       "id": 1,
@@ -15,13 +15,13 @@
         {"name": "MASK", "type": "MASK", "links": null}
       ],
       "properties": {"Node name for S&R": "LoadImage"},
-      "widgets_values": ["garment_image.jpg", "image"],
-      "title": "Load Garment"
+      "widgets_values": ["t_shirt.jpg", "image"],
+      "title": "Garment Image"
     },
     {
       "id": 2,
-      "type": "LoadImage", 
-      "pos": [50, 450],
+      "type": "LoadImage",
+      "pos": [50, 400],
       "size": {"0": 315, "1": 314},
       "flags": {},
       "order": 1,
@@ -31,12 +31,13 @@
         {"name": "MASK", "type": "MASK", "links": null}
       ],
       "properties": {"Node name for S&R": "LoadImage"},
-      "widgets_values": ["logo_example.png", "image"]
+      "widgets_values": ["company_logo.png", "image"],
+      "title": "Logo Image"
     },
     {
       "id": 3,
       "type": "LoadImage",
-      "pos": [50, 800],
+      "pos": [50, 750],
       "size": {"0": 315, "1": 314},
       "flags": {},
       "order": 2,
@@ -46,12 +47,13 @@
         {"name": "MASK", "type": "MASK", "links": [3], "slot_index": 1}
       ],
       "properties": {"Node name for S&R": "LoadImage"},
-      "widgets_values": ["mask_example.png", "image"]
+      "widgets_values": ["logo_mask.png", "image"],
+      "title": "Logo Mask (Optional)"
     },
     {
       "id": 4,
       "type": "CheckpointLoaderSimple",
-      "pos": [400, 100],
+      "pos": [400, 150],
       "size": {"0": 315, "1": 98},
       "flags": {},
       "order": 3,
@@ -62,13 +64,14 @@
         {"name": "VAE", "type": "VAE", "links": [6], "slot_index": 2}
       ],
       "properties": {"Node name for S&R": "CheckpointLoaderSimple"},
-      "widgets_values": ["flux1-dev.safetensors"]
+      "widgets_values": ["flux1-dev-fp8.safetensors"],
+      "title": "Flux Model Loader"
     },
     {
       "id": 5,
       "type": "FluxLogoTransferNode",
       "pos": [750, 100],
-      "size": {"0": 400, "1": 600},
+      "size": {"0": 420, "1": 600},
       "flags": {},
       "order": 4,
       "mode": 0,
@@ -92,16 +95,17 @@
         0.7,
         0.6,
         "professional",
-        "professional logo on t-shirt, cotton fabric, commercial quality, realistic integration, seamless blend",
-        "blurry, distorted, artificial, pixelated, low quality, artifacts, misaligned, fake looking",
+        "professional logo transfer on fabric, seamless integration, commercial quality, realistic textile texture, professional branding",
+        "blurry, distorted, artificial looking, pixelated, low quality, artifacts, misaligned logo, poor integration, fake appearance",
         false,
         true
-      ]
+      ],
+      "title": "Flux Logo Transfer Professional"
     },
     {
       "id": 6,
       "type": "SaveImage",
-      "pos": [1200, 100],
+      "pos": [1220, 100],
       "size": {"0": 315, "1": 270},
       "flags": {},
       "order": 5,
@@ -110,34 +114,50 @@
         {"name": "images", "type": "IMAGE", "link": 7}
       ],
       "properties": {"Node name for S&R": "SaveImage"},
-      "widgets_values": ["flux_logo_transfer"]
+      "widgets_values": ["flux_logo_transfer_result"],
+      "title": "Save Final Result"
     },
     {
       "id": 7,
       "type": "PreviewImage",
-      "pos": [1200, 400],
+      "pos": [1220, 400],
       "size": {"0": 315, "1": 246},
       "flags": {},
       "order": 6,
       "mode": 0,
       "inputs": [
-        {"name": "images", "type": "IMAGE", "link": null}
+        {"name": "images", "type": "IMAGE", "link": 7}
       ],
-      "properties": {"Node name for S&R": "PreviewImage"}
+      "properties": {"Node name for S&R": "PreviewImage"},
+      "title": "Preview Final Result"
     },
     {
       "id": 8,
-      "type": "ShowText",
-      "pos": [1200, 700],
-      "size": {"0": 315, "1": 200},
+      "type": "PreviewImage",
+      "pos": [1580, 400],
+      "size": {"0": 315, "1": 246},
       "flags": {},
       "order": 7,
+      "mode": 0,
+      "inputs": [
+        {"name": "images", "type": "IMAGE", "link": 8}
+      ],
+      "properties": {"Node name for S&R": "PreviewImage"},
+      "title": "Preview Mask Used"
+    },
+    {
+      "id": 9,
+      "type": "ShowText",
+      "pos": [1220, 700],
+      "size": {"0": 675, "1": 200},
+      "flags": {},
+      "order": 8,
       "mode": 0,
       "inputs": [
         {"name": "text", "type": "STRING", "link": 9}
       ],
       "properties": {"Node name for S&R": "ShowText"},
-      "widgets_values": [""]
+      "title": "Quality Analysis Report"
     }
   ],
   "links": [
@@ -148,36 +168,42 @@
     [5, 4, 1, 5, 5, "CLIP"],
     [6, 4, 2, 5, 4, "VAE"],
     [7, 5, 0, 6, 0, "IMAGE"],
-    [8, 5, 1, 7, 0, "MASK"],
-    [9, 5, 2, 8, 0, "STRING"]
+    [7, 5, 0, 7, 0, "IMAGE"],
+    [8, 5, 1, 8, 0, "IMAGE"],
+    [9, 5, 2, 9, 0, "STRING"]
   ],
   "groups": [
     {
-      "title": "Input Images",
-      "bounding": [25, 50, 365, 1100],
+      "title": "📥 INPUT IMAGES",
+      "bounding": [30, 30, 360, 1050],
       "color": "#3f789e",
       "font_size": 24
     },
     {
-      "title": "Models",
-      "bounding": [375, 50, 340, 200],
+      "title": "🤖 FLUX MODEL",
+      "bounding": [380, 130, 360, 130],
       "color": "#8f4673",
       "font_size": 24
     },
     {
-      "title": "Flux Logo Transfer",
-      "bounding": [725, 50, 450, 650],
+      "title": "🎨 LOGO TRANSFER ENGINE",
+      "bounding": [730, 80, 440, 640],
       "color": "#b58b2a",
       "font_size": 24
     },
     {
-      "title": "Output",
-      "bounding": [1175, 50, 365, 900],
+      "title": "📤 OUTPUT & ANALYSIS",
+      "bounding": [1200, 80, 720, 850],
       "color": "#88a96e",
       "font_size": 24
     }
   ],
   "config": {},
-  "extra": {},
+  "extra": {
+    "ds": {
+      "scale": 0.7,
+      "offset": [100, 50]
+    }
+  },
   "version": 0.4
 }
