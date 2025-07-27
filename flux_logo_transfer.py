@@ -4,11 +4,16 @@ import numpy as np
 from PIL import Image, ImageOps
 import cv2
 from transformers import CLIPProcessor, CLIPModel
-import comfy.model_management as model_management
-import comfy.utils
-from comfy.diffusers_load import load_diffusers_checkpoint
-import folder_paths
-from .flux_integration import FluxInpaintingEngine
+try:
+    import comfy.model_management as model_management
+    import comfy.utils
+    import folder_paths
+    COMFY_AVAILABLE = True
+except ImportError:
+    COMFY_AVAILABLE = False
+    print("⚠️ ComfyUI not detected, running in standalone mode")
+
+from flux_integration import FluxInpaintingEngine
 
 class FluxLogoTransferNode:
     """
@@ -17,7 +22,10 @@ class FluxLogoTransferNode:
     """
     
     def __init__(self):
-        self.device = model_management.get_torch_device()
+        if COMFY_AVAILABLE:
+            self.device = model_management.get_torch_device()
+        else:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.models_cache = {}
         self.clip_model = None
         self.clip_processor = None

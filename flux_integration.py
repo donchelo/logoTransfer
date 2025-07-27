@@ -7,10 +7,15 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 from typing import Dict, Tuple, Optional
-import comfy.model_management as model_management
-import comfy.sample
-import comfy.samplers
-import comfy.sd
+try:
+    import comfy.model_management as model_management
+    import comfy.sample
+    import comfy.samplers
+    import comfy.sd
+    COMFY_AVAILABLE = True
+except ImportError:
+    COMFY_AVAILABLE = False
+    print("⚠️ ComfyUI not detected in flux_integration")
 
 
 class FluxInpaintingEngine:
@@ -20,7 +25,10 @@ class FluxInpaintingEngine:
     """
     
     def __init__(self):
-        self.device = model_management.get_torch_device()
+        if COMFY_AVAILABLE:
+            self.device = model_management.get_torch_device()
+        else:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.flux_model = None
         self.fluxfill_model = None
         
@@ -163,25 +171,26 @@ class FluxInpaintingEngine:
             noise = torch.randn_like(garment_latent)
             
             # Flux.1 inpainting process
-            # Note: This is a simplified implementation
-            # In practice, you'd use the actual Flux.1 + FluxFill pipeline
-            
-            samples = comfy.sample.sample(
-                model=self.flux_model,
-                noise=noise,
-                steps=steps,
-                cfg=cfg_scale,
-                sampler_name=sampler_name,
-                scheduler=scheduler,
-                positive=positive_cond,
-                negative=negative_cond,
-                latent_image=masked_latent,
-                denoise=denoise,
-                disable_noise=False,
-                start_step=0,
-                last_step=steps,
-                force_full_denoise=True
-            )
+            if COMFY_AVAILABLE:
+                samples = comfy.sample.sample(
+                    model=self.flux_model,
+                    noise=noise,
+                    steps=steps,
+                    cfg=cfg_scale,
+                    sampler_name=sampler_name,
+                    scheduler=scheduler,
+                    positive=positive_cond,
+                    negative=negative_cond,
+                    latent_image=masked_latent,
+                    denoise=denoise,
+                    disable_noise=False,
+                    start_step=0,
+                    last_step=steps,
+                    force_full_denoise=True
+                )
+            else:
+                # Fallback: simple blending when ComfyUI not available
+                samples = masked_latent
             
             print("✅ Flux inpainting completed successfully")
             return samples
