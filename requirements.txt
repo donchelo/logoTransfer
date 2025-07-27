@@ -11,7 +11,8 @@ diffusers>=0.24.0
 accelerate>=0.24.0
 
 # CLIP Integration
-clip-by-openai>=1.0
+openai-clip
+git+https://github.com/openai/CLIP.git
 
 # Image Processing
 scikit-image>=0.22.0
