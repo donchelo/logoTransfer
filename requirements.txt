@@ -1,0 +1,30 @@
+# Core Dependencies
+torch>=2.1.0
+torchvision>=0.16.0
+numpy>=1.24.0
+Pillow>=10.0.0
+opencv-python>=4.8.0
+
+# AI/ML Models
+transformers>=4.35.0
+diffusers>=0.24.0
+accelerate>=0.24.0
+
+# CLIP Integration
+clip-by-openai>=1.0
+
+# Image Processing
+scikit-image>=0.22.0
+imageio>=2.31.0
+
+# Optional: Advanced SAM Integration (if available)
+# segment-anything>=1.0  # Uncomment if using official SAM
+
+# Flux.1 Dependencies
+# Note: Flux.1 models typically require specific installations
+# Follow Flux.1 installation guide for your system
+
+# Development Tools (optional)
+# pytest>=7.0.0
+# black>=23.0.0
+# flake8>=6.0.0
