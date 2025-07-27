@@ -17,6 +17,19 @@ git+https://github.com/openai/CLIP.git
 # Image Processing
 scikit-image>=0.22.0
 imageio>=2.31.0
+scipy>=1.11.0
+
+# Quality Assessment
+lpips>=0.1.4
+
+# Advanced Image Enhancement
+basicsr>=1.4.2
+facexlib>=0.3.0
+gfpgan>=1.3.8
+realesrgan>=0.3.0
+
+# Optional: For better performance
+xformers>=0.0.20
 
 # Optional: Advanced SAM Integration (if available)
 # segment-anything>=1.0  # Uncomment if using official SAM

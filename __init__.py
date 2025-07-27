@@ -20,17 +20,21 @@ License: MIT
 try:
     # Try relative import (ComfyUI)
     from .flux_logo_transfer import FluxLogoTransferNode
+    from .advanced_logo_transfer import AdvancedFluxLogoTransferNode
 except ImportError:
     # Try absolute import (standalone)
     from flux_logo_transfer import FluxLogoTransferNode
+    from advanced_logo_transfer import AdvancedFluxLogoTransferNode
 
 # Node registration for ComfyUI
 NODE_CLASS_MAPPINGS = {
-    "FluxLogoTransferNode": FluxLogoTransferNode
+    "FluxLogoTransferNode": FluxLogoTransferNode,
+    "AdvancedFluxLogoTransferNode": AdvancedFluxLogoTransferNode
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "FluxLogoTransferNode": "Flux Logo Transfer"
+    "FluxLogoTransferNode": "Flux Logo Transfer",
+    "AdvancedFluxLogoTransferNode": "Advanced Flux Logo Transfer Pro"
 }
 
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
