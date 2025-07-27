@@ -225,8 +225,12 @@ class FluxInpaintingEngine:
                 sigma = 1.0
             
             # Gaussian blur for soft edges
-            from scipy import ndimage
-            softened_mask = ndimage.gaussian_filter(mask_np, sigma=sigma)
+            try:
+                from scipy import ndimage
+                softened_mask = ndimage.gaussian_filter(mask_np, sigma=sigma)
+            except ImportError:
+                print("⚠️ scipy not available, using basic mask processing")
+                softened_mask = mask_np
             
             # Morphological operations for clean edges
             import cv2

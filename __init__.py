@@ -17,7 +17,21 @@ Version: 1.0.0
 License: MIT
 """
 
-from .flux_logo_transfer import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
+try:
+    # Try relative import (ComfyUI)
+    from .flux_logo_transfer import FluxLogoTransferNode
+except ImportError:
+    # Try absolute import (standalone)
+    from flux_logo_transfer import FluxLogoTransferNode
+
+# Node registration for ComfyUI
+NODE_CLASS_MAPPINGS = {
+    "FluxLogoTransferNode": FluxLogoTransferNode
+}
+
+NODE_DISPLAY_NAME_MAPPINGS = {
+    "FluxLogoTransferNode": "Flux Logo Transfer"
+}
 
 __all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
 

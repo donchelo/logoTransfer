@@ -1,4 +1,4 @@
-# 🔥 Flux Logo Transfer - Instrucciones de Instalación
+# Flux Logo Transfer - Instrucciones de Instalación
 
 ## 1. Copia archivos a RunPod
 
@@ -31,9 +31,10 @@ python main.py --listen
 
 ## 4. Buscar el nodo
 
-- En ComfyUI, presiona `Ctrl+A` (seleccionar todo) y `Delete`
-- Haz clic derecho → `Add Node` → busca: **FluxLogoTransferNode**
-- O busca en: `Add Node` → `FluxLogoTransfer` → `🔥 Flux Logo Transfer Pro`
+- En ComfyUI, haz clic derecho → `Add Node` 
+- Busca: **Flux Logo Transfer** (nombre simple, sin emojis)
+- También puedes buscar: **FluxLogoTransferNode**
+- Categoría: FluxLogoTransfer
 
 ## 5. Workflow básico
 

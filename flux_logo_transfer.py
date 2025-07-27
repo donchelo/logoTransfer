@@ -13,7 +13,12 @@ except ImportError:
     COMFY_AVAILABLE = False
     print("⚠️ ComfyUI not detected, running in standalone mode")
 
-from flux_integration import FluxInpaintingEngine
+try:
+    # Try relative import (ComfyUI)
+    from .flux_integration import FluxInpaintingEngine
+except ImportError:
+    # Try absolute import (standalone)
+    from flux_integration import FluxInpaintingEngine
 
 class FluxLogoTransferNode:
     """
@@ -448,11 +453,4 @@ class FluxLogoTransferNode:
             print(f"⚠️ Quality enhancement failed: {e}")
             return image
 
-# Node registration
-NODE_CLASS_MAPPINGS = {
-    "FluxLogoTransferNode": FluxLogoTransferNode
-}
-
-NODE_DISPLAY_NAME_MAPPINGS = {
-    "FluxLogoTransferNode": "🔥 Flux Logo Transfer Pro"
-}
+# Node registration is handled in __init__.py
